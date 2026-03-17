@@ -644,6 +644,7 @@ function startApp() {
       S.currentRoom = S.rooms[0] ? S.rooms[0].roomId : null;
       renderRooms();
       renderChatHeader();
+      setSyncLabel('live');  // connected successfully — show live immediately
       if (S.currentRoom) {
         loadMessages(S.currentRoom, function() {
           document.getElementById('loading-overlay').classList.add('hidden');
@@ -667,32 +668,45 @@ function startPolling() {
   S.pollTimer = setInterval(poll, 4000);
 }
 
+// Consecutive fail counter — only show offline after 3 failures in a row
+var _pollFails = 0;
+
 function poll() {
   if (!S.currentRoom || S.syncing) return;
   S.syncing = true;
-  setSyncLabel('syncing…');
+  // Don't show "syncing" label — too noisy. Only show state changes.
   api({ action:'getMessages', roomId:S.currentRoom, since:S.lastTs[S.currentRoom]||null },
     function(msgs) {
-      S.syncing = false;
+      S.syncing  = false;
+      _pollFails = 0;           // reset fail counter on success
       setSyncLabel('live');
-      if (!msgs || !msgs.length) return;
+      if (!msgs || !msgs.length) return;  // empty = no new msgs, not an error
       var existing = S.messages[S.currentRoom] || [];
       var seen = {};
       existing.forEach(function(m){ seen[m.msgId]=true; });
       var fresh = msgs.filter(function(m){ return !seen[m.msgId]; });
       if (!fresh.length) return;
       S.messages[S.currentRoom] = existing.concat(fresh);
-      S.lastTs[S.currentRoom] = fresh[fresh.length-1].timestamp;
+      S.lastTs[S.currentRoom]   = fresh[fresh.length-1].timestamp;
       renderMessages(); renderRooms();
     },
-    function(){ S.syncing=false; setSyncLabel('offline'); }
+    function(err) {
+      S.syncing = false;
+      _pollFails++;
+      // Only show offline after 3 consecutive failures (avoids false alarms)
+      if (_pollFails >= 3) {
+        setSyncLabel('offline');
+      }
+      // else: keep showing 'live' for brief blips
+    }
   );
 }
 
 function setSyncLabel(t) {
   var el = document.getElementById('sync-indicator');
+  if (!el) return;
   el.textContent = t;
-  el.style.color = t==='live'?'var(--teal)':t==='offline'?'var(--coral)':'var(--ink-3)';
+  el.style.color = t==='live' ? 'var(--teal)' : t==='offline' ? 'var(--coral)' : 'var(--ink-3)';
 }
 
 function manualRefresh() {
