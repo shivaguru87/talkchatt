@@ -2,7 +2,7 @@
   "name": "TalkChatt",
   "short_name": "TalkChatt",
   "description": "Real-time chat app powered by Google Sheets",
-  "start_url": "/talkchatt",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
