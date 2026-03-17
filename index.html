@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SupaChat — Frontend (Index.html)
+  TalkChatt — Frontend (Index.html)
   Served by Google Apps Script via HtmlService.
   All API calls go to the same Script URL via fetch POST.
   No external dependencies except Google Fonts.
@@ -540,7 +540,7 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
 <!-- Loading overlay shown while init data loads -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p>Connecting to SupaChat…</p>
+  <p>Connecting to TalkChatt…</p>
 </div>
 
 <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
@@ -1353,7 +1353,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 // Fired when user installs from our banner
 window.addEventListener('appinstalled', function() {
   hideInstallBanner();
-  showToast('SupaChat installed! Find it on your home screen 🎉');
+  showToast('TalkChatt installed! Find it on your home screen 🎉');
   deferredInstallPrompt = null;
 });
 
@@ -1378,7 +1378,7 @@ function triggerInstall() {
   deferredInstallPrompt.prompt();
   deferredInstallPrompt.userChoice.then(function(result) {
     if (result.outcome === 'accepted') {
-      showToast('Installing SupaChat… 🚀');
+      showToast('Installing TalkChatt… 🚀');
     }
     deferredInstallPrompt = null;
     hideInstallBanner();
@@ -1396,7 +1396,7 @@ function triggerInstall() {
 
   // Minimal service worker: cache-first for offline shell
   var swCode = `
-    var CACHE = 'supachat-v1';
+    var CACHE = 'TalkChatt-v1';
     var SHELL = []; // GAS serves dynamically, nothing to precache
 
     self.addEventListener('install', function(e) {
@@ -1435,7 +1435,7 @@ function triggerInstall() {
             // Network failed — try cache
             return caches.match(e.request).then(function(cached) {
               return cached || new Response(
-                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use SupaChat.</h2>',
+                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use TalkChatt.</h2>',
                 { headers: { 'Content-Type': 'text/html' } }
               );
             });
@@ -1474,7 +1474,7 @@ init();
 <div id="install-banner">
   <div id="install-banner-icon">💬</div>
   <div id="install-banner-text">
-    <strong>Install SupaChat</strong>
+    <strong>Install TalkChatt</strong>
     <span>Add to home screen for the best experience</span>
   </div>
   <button id="install-banner-btn" onclick="triggerInstall()">Install</button>
