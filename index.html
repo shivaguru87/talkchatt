@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  TalkChatt — Frontend (Index.html)
+  SupaChat — Frontend (Index.html)
   Served by Google Apps Script via HtmlService.
   All API calls go to the same Script URL via fetch POST.
   No external dependencies except Google Fonts.
@@ -453,6 +453,86 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
   #sidebar-backdrop.open{display:block}
   .msg-bubble{max-width:85%}
 }
+
+/* ── Onboarding overlay ──────────────────────────────── */
+#onboard-overlay {
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  z-index:2000;padding:20px;
+}
+#onboard-overlay.hidden{display:none}
+#onboard-box {
+  background:var(--bg-panel);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:32px 24px;width:100%;max-width:360px;
+  text-align:center;display:flex;flex-direction:column;gap:14px;
+  box-shadow:0 8px 40px rgba(0,0,0,.5);
+}
+#onboard-icon{font-size:52px}
+#onboard-box h2{font-family:var(--font-head);font-size:22px;font-weight:700}
+#onboard-box p{font-size:13px;color:var(--ink-2)}
+#onboard-name {
+  width:100%;background:var(--bg-input);border:1px solid var(--border);
+  color:var(--ink);border-radius:var(--r-sm);padding:12px 14px;
+  font-family:var(--font-mono);font-size:15px;text-align:center;
+  transition:border-color var(--ease);
+}
+#onboard-name:focus{outline:none;border-color:var(--teal)}
+#onboard-btn {
+  background:var(--teal);color:#0e0e12;border:none;
+  border-radius:var(--r-sm);padding:13px;font-family:var(--font-mono);
+  font-size:14px;font-weight:700;cursor:pointer;
+  transition:opacity var(--ease);
+}
+#onboard-btn:hover{opacity:.85}
+#onboard-error{font-size:12px;color:var(--coral);min-height:16px}
+
+/* ── User display (replaces dropdown) ───────────────── */
+#user-display {
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;background:var(--bg-input);
+  border:1px solid var(--border);border-radius:var(--r-sm);
+}
+#user-avatar {
+  width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#0e0e12;flex-shrink:0;
+}
+#user-name-label{font-size:13px;font-weight:600}
+
+/* ── Admin panel overlay ─────────────────────────────── */
+#admin-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  display:none;align-items:flex-start;justify-content:center;
+  z-index:1500;padding:20px;overflow-y:auto;
+}
+#admin-overlay.open{display:flex}
+#admin-box {
+  background:var(--bg-panel);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:24px;width:100%;max-width:400px;
+  margin-top:20px;box-shadow:0 8px 40px rgba(0,0,0,.6);
+}
+#admin-box h2{font-family:var(--font-head);font-size:20px;margin-bottom:16px}
+#admin-box h3{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.request-card {
+  background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:12px;margin-bottom:8px;
+}
+.request-card .req-name{font-size:14px;font-weight:700;margin-bottom:3px}
+.request-card .req-meta{font-size:11px;color:var(--ink-2);margin-bottom:8px}
+.request-actions{display:flex;gap:8px}
+.req-approve{background:var(--teal);color:#0e0e12;border:none;border-radius:var(--r-sm);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.req-reject{background:var(--bg-input);color:var(--coral);border:1px solid var(--coral);border-radius:var(--r-sm);padding:6px 14px;font-size:12px;cursor:pointer}
+
+/* ── Request channel overlay ─────────────────────────── */
+#request-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  display:none;align-items:center;justify-content:center;
+  z-index:1500;padding:20px;
+}
+#request-overlay.open{display:flex}
+
+/* ── Admin secret tap zone (logo tap 5x) ─────────────── */
+#logo-mark{cursor:pointer;user-select:none}
 </style>
 </head>
 <body>
@@ -460,7 +540,7 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
 <!-- Loading overlay shown while init data loads -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p>Connecting to TalkChatt…</p>
+  <p>Connecting to SupaChat…</p>
 </div>
 
 <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
@@ -471,14 +551,18 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
   <!-- ── SIDEBAR ─────────────────────────────────────────── -->
   <aside id="sidebar">
     <div id="logo">
-      <div id="logo-mark">S</div>
+      <div id="logo-mark" onclick="handleLogoTap()">T</div>
       <span id="logo-text">TalkChatt</span>
       <button id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     </div>
 
+    <!-- Shows current user name — no dropdown, locked after first set -->
     <div id="user-panel">
-      <span class="panel-label">You are</span>
-      <select id="user-select" onchange="switchUser(this.value)"></select>
+      <span class="panel-label">Chatting as</span>
+      <div id="user-display">
+        <div id="user-avatar"></div>
+        <span id="user-name-label">…</span>
+      </div>
     </div>
 
     <div id="search-panel">
@@ -488,11 +572,10 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
     <div id="rooms-section">
       <h3>Channels</h3>
       <div id="rooms-list"></div>
-      <button id="add-room-btn" onclick="openModal('room')">＋ New Channel</button>
-    </div>
-
-    <div id="users-footer">
-      <button id="add-user-btn" onclick="openModal('user')">＋ Add User</button>
+      <!-- Request channel button — visible to all non-admins -->
+      <button id="request-room-btn" onclick="openRequestChannel()">＋ Request Channel</button>
+      <!-- Admin-only new channel button — hidden by default -->
+      <button id="add-room-btn" onclick="openModal('room')" style="display:none">＋ New Channel</button>
     </div>
   </aside>
 
@@ -528,7 +611,53 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
   </main>
 </div>
 
-<!-- Modal (shared for room + user creation) -->
+<!-- ── Onboarding: Enter your name (shown on first open) ── -->
+<div id="onboard-overlay">
+  <div id="onboard-box">
+    <div id="onboard-icon">💬</div>
+    <h2>Welcome to TalkChatt</h2>
+    <p>Enter your name to start chatting</p>
+    <input id="onboard-name" type="text" placeholder="Your name…" maxlength="32"
+      onkeydown="if(event.key==='Enter') submitOnboard()"/>
+    <button id="onboard-btn" onclick="submitOnboard()">Start Chatting →</button>
+    <div id="onboard-error"></div>
+  </div>
+</div>
+
+<!-- ── Admin PIN overlay ── -->
+<div id="admin-overlay" onclick="if(event.target===this)closeAdminOverlay()">
+  <div id="admin-box">
+    <h2>🔐 Admin Panel</h2>
+    <div id="admin-requests-section">
+      <h3>Pending Channel Requests</h3>
+      <div id="admin-requests-list"><p style="color:var(--ink-3);font-size:13px">Loading…</p></div>
+    </div>
+    <div style="margin-top:16px">
+      <h3>Create Channel Directly</h3>
+      <div class="modal-field"><label>Name</label><input id="a-room-name" type="text" placeholder="channel-name" maxlength="32"/></div>
+      <div class="modal-field"><label>Description</label><input id="a-room-desc" type="text" placeholder="What is this about?" maxlength="60"/></div>
+      <div class="modal-field"><label>Icon</label><input id="a-room-icon" type="text" placeholder="💬" maxlength="4"/></div>
+      <button class="modal-btn primary" style="width:100%" onclick="adminCreateRoom()">Create Channel</button>
+    </div>
+    <button class="modal-btn secondary" style="width:100%;margin-top:10px" onclick="closeAdminOverlay()">Close</button>
+  </div>
+</div>
+
+<!-- ── Request channel modal ── -->
+<div id="request-overlay" onclick="if(event.target===this)closeRequestOverlay()">
+  <div id="modal">
+    <h2>Request a Channel</h2>
+    <p style="font-size:12px;color:var(--ink-2);margin-bottom:14px">Your request will be sent to the admin for approval.</p>
+    <div class="modal-field"><label>Channel Name</label><input id="req-name" type="text" placeholder="e.g. sports-talk" maxlength="32"/></div>
+    <div class="modal-field"><label>Reason / Description</label><input id="req-desc" type="text" placeholder="What will this channel be about?" maxlength="100"/></div>
+    <div id="modal-btns">
+      <button class="modal-btn secondary" onclick="closeRequestOverlay()">Cancel</button>
+      <button class="modal-btn primary" onclick="submitChannelRequest()">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal (admin room creation reuse) -->
 <div id="modal-overlay" onclick="handleModalClick(event)">
   <div id="modal">
     <h2 id="modal-title">New Channel</h2>
@@ -545,14 +674,16 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
    CONFIG
 ════════════════════════════════════════════════════════════ */
 
-// The Web App URL — google.script.run handles server calls
-// automatically when deployed as a Web App.
-// We call the backend via google.script.run.withSuccessHandler().
-// For standalone fetch (testing outside GAS), set SCRIPT_URL.
-// When running inside GAS HtmlService, google.script.run is used.
-// Hosted on GitHub Pages — always fetch mode
+// ↓↓↓ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE ↓↓↓
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwXHkiTgpLc9TvwdfTcDCqWPyWv3kLYZrcDDYu5KxdBSz9UOk_Aw8gym6JAdrnqkYHz/exec';
 
-// Polling interval in ms (how often to check for new messages)
+// Admin secret PIN — change this to your own secret code
+var ADMIN_PIN = 'Vihaan2025';
+
+// Admin display name — messages from this name get admin badge
+var ADMIN_NAME = 'Shiva';
+
+// Polling interval ms
 var POLL_MS = 4000;
 
 /* ════════════════════════════════════════════════════════════
@@ -561,38 +692,33 @@ var POLL_MS = 4000;
 var state = {
   users:        [],
   rooms:        [],
-  messages:     {},       // { roomId: [ msgObj, … ] }
-  currentUser:  null,
+  messages:     {},
+  currentUser:  null,   // userId string
   currentRoom:  null,
   unread:       {},
   theme:        'dark',
-  lastTs:       {},       // { roomId: ISO string } for polling
+  lastTs:       {},
   pollTimer:    null,
   searchQuery:  '',
-  modalMode:    'room',   // 'room' | 'user'
   syncing:      false,
+  isAdmin:      false,
+  logoTaps:     0,
+  logoTapTimer: null,
 };
 
 /* ════════════════════════════════════════════════════════════
    API LAYER
-   Hosted on GitHub Pages → always uses fetch POST to GAS URL.
-   ⚠️  REPLACE the GAS_URL value below with your actual URL!
 ════════════════════════════════════════════════════════════ */
-
-// ↓↓↓ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE ↓↓↓
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwXHkiTgpLc9TvwdfTcDCqWPyWv3kLYZrcDDYu5KxdBSz9UOk_Aw8gym6JAdrnqkYHz/exec';
-// ↑↑↑ Example: 'https://script.google.com/macros/s/ABC123.../exec'
-
 function callServer(payload, onSuccess, onError) {
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(payload),
     redirect: 'follow',
   })
   .then(function(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.text(); // GAS returns text, not always JSON content-type
+    return r.text();
   })
   .then(function(text) {
     var data = JSON.parse(text);
@@ -604,36 +730,99 @@ function callServer(payload, onSuccess, onError) {
 function noop(){}
 
 /* ════════════════════════════════════════════════════════════
+   ONBOARDING — Name entry on first open
+════════════════════════════════════════════════════════════ */
+function checkOnboarding() {
+  var savedUserId = localStorage.getItem('tc_userId');
+  var savedName   = localStorage.getItem('tc_userName');
+
+  if (savedUserId && savedName) {
+    // Already onboarded — restore identity
+    state.currentUser = savedUserId;
+    state.isAdmin = (savedName === ADMIN_NAME);
+    return true; // proceed to load
+  }
+  // First open — show name entry screen
+  document.getElementById('onboard-overlay').classList.remove('hidden');
+  setTimeout(function(){
+    document.getElementById('onboard-name').focus();
+  }, 300);
+  return false;
+}
+
+function submitOnboard() {
+  var nameInput = document.getElementById('onboard-name');
+  var name = nameInput.value.trim();
+  var errEl = document.getElementById('onboard-error');
+
+  if (!name) { errEl.textContent = 'Please enter your name'; return; }
+  if (name.length < 2) { errEl.textContent = 'Name must be at least 2 characters'; return; }
+  errEl.textContent = '';
+
+  var btn = document.getElementById('onboard-btn');
+  btn.textContent = 'Setting up…';
+  btn.disabled = true;
+
+  // Pick a random color for the user
+  var colors = ['#5b5bff','#ff6b6b','#2ee8c0','#ffd166','#ff9f43','#a29bfe','#fd79a8','#55efc4','#74b9ff'];
+  var color = colors[Math.floor(Math.random() * colors.length)];
+
+  // Create user on server
+  callServer({ action: 'createUser', name: name, color: color }, function(user) {
+    // Save to localStorage permanently
+    localStorage.setItem('tc_userId',   user.userId);
+    localStorage.setItem('tc_userName', user.name);
+    localStorage.setItem('tc_color',    user.color);
+
+    state.currentUser = user.userId;
+    state.isAdmin = (user.name === ADMIN_NAME);
+
+    // Hide onboarding
+    document.getElementById('onboard-overlay').classList.add('hidden');
+
+    // Now load the app
+    loadApp();
+  }, function(err) {
+    btn.textContent = 'Start Chatting →';
+    btn.disabled = false;
+    errEl.textContent = 'Error: ' + err + '. Please try again.';
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════ */
 function init() {
-  // Load theme from localStorage
   var savedTheme = localStorage.getItem('sc_theme');
   if (savedTheme) { state.theme = savedTheme; }
   applyTheme(state.theme);
 
-  // Load last user from localStorage
-  var savedUser = localStorage.getItem('sc_user');
+  // Check if user has onboarded before
+  var alreadyOnboarded = checkOnboarding();
+  if (alreadyOnboarded) {
+    loadApp();
+  }
+  // else: onboarding screen is shown, loadApp() called after name submit
+}
+
+function loadApp() {
+  // Update admin state
+  var savedName = localStorage.getItem('tc_userName');
+  state.isAdmin = (savedName === ADMIN_NAME);
+
+  // Show/hide admin channel button
+  document.getElementById('add-room-btn').style.display    = state.isAdmin ? 'block' : 'none';
+  document.getElementById('request-room-btn').style.display = state.isAdmin ? 'none'  : 'block';
 
   callServer({ action: 'getInit' }, function(data) {
     state.users = data.users || [];
     state.rooms = data.rooms || [];
-
-    // Set current user
-    if (savedUser && state.users.find(function(u){return u.userId===savedUser;})) {
-      state.currentUser = savedUser;
-    } else {
-      state.currentUser = state.users[0] ? state.users[0].userId : null;
-    }
-
-    // Set current room
     state.currentRoom = state.rooms[0] ? state.rooms[0].roomId : null;
 
-    renderUserSelect();
+    renderUserDisplay();
     renderRooms();
     renderChatHeader();
 
-    // Load initial messages
     if (state.currentRoom) {
       loadMessages(state.currentRoom, function() {
         document.getElementById('loading-overlay').classList.add('hidden');
@@ -642,7 +831,6 @@ function init() {
     } else {
       document.getElementById('loading-overlay').classList.add('hidden');
     }
-
   }, function(err) {
     document.getElementById('loading-overlay').querySelector('p').textContent = 'Error: ' + err;
   });
@@ -819,10 +1007,8 @@ function toggleReaction(msgId, emoji) {
 /* ════════════════════════════════════════════════════════════
    USER / ROOM MANAGEMENT
 ════════════════════════════════════════════════════════════ */
-function switchUser(userId) {
-  state.currentUser = userId;
-  localStorage.setItem('sc_user', userId);
-}
+// switchUser not needed — identity is locked after onboarding
+function switchUser(userId) {}
 
 function switchRoom(roomId) {
   state.currentRoom = roomId;
@@ -844,12 +1030,16 @@ function switchRoom(roomId) {
 /* ════════════════════════════════════════════════════════════
    RENDER
 ════════════════════════════════════════════════════════════ */
-function renderUserSelect() {
-  var sel = document.getElementById('user-select');
-  sel.innerHTML = state.users.map(function(u){
-    return '<option value="' + u.userId + '"' + (u.userId === state.currentUser ? ' selected' : '') + '>' + escHtml(u.name) + '</option>';
-  }).join('');
+function renderUserDisplay() {
+  var name  = localStorage.getItem('tc_userName') || '?';
+  var color = localStorage.getItem('tc_color') || '#5b5bff';
+  document.getElementById('user-name-label').textContent = name + (state.isAdmin ? ' 👑' : '');
+  var av = document.getElementById('user-avatar');
+  av.textContent = getInitials(name);
+  av.style.background = color;
 }
+// Keep stub so nothing breaks
+function renderUserSelect(){}
 
 function renderRooms() {
   var list = document.getElementById('rooms-list');
@@ -1163,7 +1353,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 // Fired when user installs from our banner
 window.addEventListener('appinstalled', function() {
   hideInstallBanner();
-  showToast('TalkChatt installed! Find it on your home screen 🎉');
+  showToast('SupaChat installed! Find it on your home screen 🎉');
   deferredInstallPrompt = null;
 });
 
@@ -1188,7 +1378,7 @@ function triggerInstall() {
   deferredInstallPrompt.prompt();
   deferredInstallPrompt.userChoice.then(function(result) {
     if (result.outcome === 'accepted') {
-      showToast('Installing TalkChatt… 🚀');
+      showToast('Installing SupaChat… 🚀');
     }
     deferredInstallPrompt = null;
     hideInstallBanner();
@@ -1206,7 +1396,7 @@ function triggerInstall() {
 
   // Minimal service worker: cache-first for offline shell
   var swCode = `
-    var CACHE = 'TalkChatt-v1';
+    var CACHE = 'supachat-v1';
     var SHELL = []; // GAS serves dynamically, nothing to precache
 
     self.addEventListener('install', function(e) {
@@ -1245,7 +1435,7 @@ function triggerInstall() {
             // Network failed — try cache
             return caches.match(e.request).then(function(cached) {
               return cached || new Response(
-                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use TalkChatt.</h2>',
+                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use SupaChat.</h2>',
                 { headers: { 'Content-Type': 'text/html' } }
               );
             });
@@ -1284,7 +1474,7 @@ init();
 <div id="install-banner">
   <div id="install-banner-icon">💬</div>
   <div id="install-banner-text">
-    <strong>Install TalkChatt</strong>
+    <strong>Install SupaChat</strong>
     <span>Add to home screen for the best experience</span>
   </div>
   <button id="install-banner-btn" onclick="triggerInstall()">Install</button>
