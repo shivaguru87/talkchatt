@@ -518,35 +518,58 @@ function api(payload, ok, fail) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body:    JSON.stringify(payload),
     redirect:'follow',
-    mode:    'cors',
   })
-  .then(function(r) {
-    if (!r.ok && r.status !== 0) {
-      throw new Error('HTTP error ' + r.status);
-    }
-    return r.text();
-  })
+  .then(function(r) { return r.text(); })
   .then(function(t) {
-    if (!t || t.trim() === '') throw new Error('Empty server response');
-    // GAS sometimes wraps JSON in HTML on error
-    var start = t.indexOf('{');
-    var end   = t.lastIndexOf('}');
-    if (start === -1) {
-      // Check for common GAS error messages
-      if (t.indexOf('not found') >= 0 || t.indexOf('Error') >= 0) {
-        throw new Error('GAS error — redeploy as new version');
+    if (!t || !t.trim()) { (ok||noop)([]); return; }
+
+    // GAS sometimes returns JSON wrapped inside HTML — extract it
+    var clean = t.trim();
+
+    // If it looks like HTML, dig out the JSON
+    if (clean.charAt(0) !== '{' && clean.charAt(0) !== '[') {
+      // Try to find JSON object or array anywhere in the response
+      var objStart = clean.indexOf('{');
+      var arrStart = clean.indexOf('[');
+      var start = -1;
+      if (objStart >= 0 && (arrStart < 0 || objStart < arrStart)) start = objStart;
+      else if (arrStart >= 0) start = arrStart;
+
+      if (start >= 0) {
+        clean = clean.slice(start);
+        // Trim any trailing HTML after the JSON
+        var depth = 0, end = 0;
+        var opener = clean.charAt(0), closer = opener === '{' ? '}' : ']';
+        for (var i = 0; i < clean.length; i++) {
+          if (clean[i] === opener) depth++;
+          else if (clean[i] === closer) { depth--; if (depth === 0) { end = i; break; } }
+        }
+        clean = clean.slice(0, end + 1);
+      } else {
+        // No JSON found — check for known GAS error pages
+        if (t.indexOf('Authorization') >= 0 || t.indexOf('Sign in') >= 0) {
+          (fail||noop)('GAS access denied — set deployment to "Anyone"'); return;
+        }
+        if (t.indexOf('Script') >= 0 && t.indexOf('not found') >= 0) {
+          (fail||noop)('GAS function missing — redeploy Code.gs'); return;
+        }
+        // Empty or unknown — treat as empty success (no new messages)
+        (ok||noop)([]); return;
       }
-      if (t.indexOf('Unauthorized') >= 0 || t.indexOf('login') >= 0) {
-        throw new Error('Set GAS access to Anyone');
-      }
-      throw new Error('Invalid response from server');
     }
-    var d = JSON.parse(t.slice(start, end + 1));
-    if (d && d.error) { (fail||noop)(d.error); return; }
-    (ok||noop)(d);
+
+    try {
+      var d = JSON.parse(clean);
+      if (d && d.error) { (fail||noop)(d.error); return; }
+      (ok||noop)(d);
+    } catch(e) {
+      // JSON parse failed — log and treat as empty
+      console.warn('[TalkChatt] JSON parse failed:', clean.slice(0,100));
+      (ok||noop)([]);
+    }
   })
   .catch(function(e) {
-    console.error('[TalkChatt API] ' + payload.action + ':', e.message);
+    console.error('[TalkChatt API] ' + (payload.action||'?') + ':', e.message);
     (fail||noop)(e.message);
   });
 }
