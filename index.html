@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  TalkChatt — Frontend (Index.html)
+  SupaChat — Frontend (Index.html)
   Served by Google Apps Script via HtmlService.
   All API calls go to the same Script URL via fetch POST.
   No external dependencies except Google Fonts.
@@ -540,7 +540,7 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
 <!-- Loading overlay shown while init data loads -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p>Connecting to TalkChatt…</p>
+  <p>Connecting to SupaChat…</p>
 </div>
 
 <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
@@ -675,10 +675,10 @@ mark.hi{background:rgba(255,209,102,0.3);color:inherit;border-radius:2px}
 ════════════════════════════════════════════════════════════ */
 
 // ↓↓↓ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE ↓↓↓
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwXHkiTgpLc9TvwdfTcDCqWPyWv3kLYZrcDDYu5KxdBSz9UOk_Aw8gym6JAdrnqkYHz/exec';
+var GAS_URL = 'YOUR_GAS_WEBAPP_URL_HERE';
 
 // Admin secret PIN — change this to your own secret code
-var ADMIN_PIN = 'Vihaan2025';
+var ADMIN_PIN = 'shiva2024';
 
 // Admin display name — messages from this name get admin badge
 var ADMIN_NAME = 'Shiva';
@@ -1193,34 +1193,189 @@ function handleModalClick(e) {
 }
 
 function submitModal() {
-  if (state.modalMode === 'user') {
-    var name  = document.getElementById('m-name').value.trim();
-    var color = document.getElementById('modal-color-select').value;
-    if (!name) return;
-    callServer({ action: 'createUser', name: name, color: color }, function(user) {
-      state.users.push(user);
-      state.currentUser = user.userId;
-      localStorage.setItem('sc_user', user.userId);
-      renderUserSelect();
-      closeModal();
-      showToast('User "' + user.name + '" created!');
-    }, function(err){ showToast('Error: ' + err); });
+  // Admin direct channel creation only
+  var name = document.getElementById('m-name') ? document.getElementById('m-name').value.trim() : '';
+  var desc = document.getElementById('m-desc') ? document.getElementById('m-desc').value.trim() : '';
+  var icon = document.getElementById('m-icon') ? document.getElementById('m-icon').value.trim() : '💬';
+  if (!name) { showToast('Enter a channel name'); return; }
+  callServer({ action: 'createRoom', name: name, icon: icon || '💬', desc: desc }, function(room) {
+    state.rooms.push(room);
+    state.currentRoom = room.roomId;
+    state.messages[room.roomId] = [];
+    renderRooms(); renderChatHeader(); renderMessages();
+    closeModal();
+    showToast('Channel #' + room.name + ' created!');
+  }, function(err){ showToast('Error: ' + err); });
+}
+
+/* ════════════════════════════════════════════════════════════
+   CHANNEL REQUEST FLOW (for non-admin users)
+════════════════════════════════════════════════════════════ */
+function openRequestChannel() {
+  document.getElementById('request-overlay').classList.add('open');
+  setTimeout(function(){
+    var el = document.getElementById('req-name');
+    if (el) el.focus();
+  }, 100);
+}
+
+function closeRequestOverlay() {
+  document.getElementById('request-overlay').classList.remove('open');
+}
+
+function submitChannelRequest() {
+  var name = document.getElementById('req-name').value.trim();
+  var desc = document.getElementById('req-desc').value.trim();
+  if (!name) { showToast('Please enter a channel name'); return; }
+  var userName = localStorage.getItem('tc_userName') || 'Unknown';
+  callServer({
+    action:      'requestChannel',
+    name:        name,
+    desc:        desc,
+    requestedBy: userName,
+    userId:      state.currentUser,
+  }, function() {
+    closeRequestOverlay();
+    showToast('Request sent! Admin will review it 👍');
+    document.getElementById('req-name').value = '';
+    document.getElementById('req-desc').value = '';
+  }, function(err){ showToast('Error: ' + err); });
+}
+
+/* ════════════════════════════════════════════════════════════
+   ADMIN PANEL
+   Access: tap the "T" logo 5 times quickly
+   Uses a custom PIN modal (not prompt() — blocked in PWA)
+════════════════════════════════════════════════════════════ */
+function handleLogoTap() {
+  state.logoTaps = (state.logoTaps || 0) + 1;
+  clearTimeout(state.logoTapTimer);
+  // Visual feedback — flash the logo
+  var logo = document.getElementById('logo-mark');
+  logo.style.transform = 'scale(1.3)';
+  setTimeout(function(){ logo.style.transform = ''; }, 150);
+
+  if (state.logoTaps >= 5) {
+    state.logoTaps = 0;
+    showPinModal();
   } else {
-    var name = document.getElementById('m-name').value.trim();
-    var desc = document.getElementById('m-desc') ? document.getElementById('m-desc').value.trim() : '';
-    var icon = document.getElementById('m-icon') ? document.getElementById('m-icon').value.trim() : '💬';
-    if (!name) return;
-    callServer({ action: 'createRoom', name: name, icon: icon || '💬', desc: desc }, function(room) {
-      state.rooms.push(room);
-      state.currentRoom = room.roomId;
-      state.messages[room.roomId] = [];
-      renderRooms();
-      renderChatHeader();
-      renderMessages();
-      closeModal();
-      showToast('Channel #' + room.name + ' created!');
-    }, function(err){ showToast('Error: ' + err); });
+    state.logoTapTimer = setTimeout(function(){ state.logoTaps = 0; }, 2500);
   }
+}
+
+function showPinModal() {
+  // Build a custom PIN modal (prompt() blocked in standalone PWA mode)
+  var overlay = document.getElementById('pin-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'pin-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px';
+    overlay.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:28px 24px;width:100%;max-width:320px;text-align:center">'
+      + '<div style="font-size:32px;margin-bottom:10px">🔐</div>'
+      + '<h3 style="font-family:var(--font-head);font-size:18px;margin-bottom:6px">Admin Access</h3>'
+      + '<p style="font-size:12px;color:var(--ink-2);margin-bottom:16px">Enter your admin PIN</p>'
+      + '<input id="pin-input" type="password" placeholder="PIN" maxlength="20"'
+      + '  style="width:100%;background:var(--bg-input);border:1px solid var(--border);color:var(--ink);'
+      + '  border-radius:8px;padding:12px;font-size:16px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px"'
+      + '  onkeydown="if(event.key==='Enter')submitPin()"/>'
+      + '<div id="pin-error" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:12px"></div>'
+      + '<div style="display:flex;gap:10px">'
+      + '  <button onclick="closePinModal()" style="flex:1;padding:10px;background:var(--bg-hover);border:none;border-radius:8px;color:var(--ink-2);cursor:pointer;font-size:13px">Cancel</button>'
+      + '  <button onclick="submitPin()" style="flex:1;padding:10px;background:var(--teal);border:none;border-radius:8px;color:#0e0e12;font-weight:700;cursor:pointer;font-size:13px">Enter</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+  setTimeout(function(){
+    var inp = document.getElementById('pin-input');
+    if (inp) { inp.value = ''; inp.focus(); }
+    document.getElementById('pin-error').textContent = '';
+  }, 100);
+}
+
+function closePinModal() {
+  var o = document.getElementById('pin-overlay');
+  if (o) o.style.display = 'none';
+}
+
+function submitPin() {
+  var pin = document.getElementById('pin-input').value;
+  if (pin === ADMIN_PIN) {
+    closePinModal();
+    // Grant admin for this session
+    state.isAdmin = true;
+    document.getElementById('add-room-btn').style.display    = 'block';
+    document.getElementById('request-room-btn').style.display = 'none';
+    document.getElementById('admin-overlay').classList.add('open');
+    loadPendingRequests();
+  } else {
+    document.getElementById('pin-error').textContent = 'Wrong PIN. Try again.';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-input').focus();
+  }
+}
+
+function closeAdminOverlay() {
+  document.getElementById('admin-overlay').classList.remove('open');
+}
+
+function loadPendingRequests() {
+  var list = document.getElementById('admin-requests-list');
+  list.innerHTML = '<p style="color:var(--ink-3);font-size:13px">Loading…</p>';
+  callServer({ action: 'getChannelRequests' }, function(requests) {
+    if (!requests || requests.length === 0) {
+      list.innerHTML = '<p style="color:var(--ink-3);font-size:13px">No pending requests 🎉</p>';
+      return;
+    }
+    list.innerHTML = '';
+    requests.forEach(function(req) {
+      var card = document.createElement('div');
+      card.className = 'request-card';
+      card.innerHTML = '<div class="req-name"># ' + escHtml(req.name) + '</div>'
+        + '<div class="req-meta">By <strong>' + escHtml(req.requestedBy || '') + '</strong>'
+        + (req.desc ? ' · ' + escHtml(req.desc) : '') + '</div>'
+        + '<div class="request-actions">'
+        + '<button class="req-approve" onclick="approveRequest('' + req.reqId + '','' + escHtml(req.name) + '','' + escHtml(req.desc||'') + '')">✓ Approve</button>'
+        + '<button class="req-reject"  onclick="rejectRequest('' + req.reqId + '')">✕ Reject</button>'
+        + '</div>';
+      list.appendChild(card);
+    });
+  }, function(err){
+    list.innerHTML = '<p style="color:var(--coral);font-size:13px">Error: ' + err + '</p>';
+  });
+}
+
+function approveRequest(reqId, name, desc) {
+  callServer({ action: 'approveChannel', reqId: reqId, name: name, desc: desc, icon: '💬' }, function(room) {
+    state.rooms.push(room);
+    renderRooms();
+    showToast('Channel #' + room.name + ' approved & created! ✅');
+    loadPendingRequests();
+  }, function(err){ showToast('Error: ' + err); });
+}
+
+function rejectRequest(reqId) {
+  callServer({ action: 'rejectChannel', reqId: reqId }, function() {
+    showToast('Request rejected');
+    loadPendingRequests();
+  }, function(err){ showToast('Error: ' + err); });
+}
+
+function adminCreateRoom() {
+  var name = document.getElementById('a-room-name').value.trim();
+  var desc = document.getElementById('a-room-desc').value.trim();
+  var icon = document.getElementById('a-room-icon').value.trim() || '💬';
+  if (!name) { showToast('Enter a channel name'); return; }
+  callServer({ action: 'createRoom', name: name, icon: icon, desc: desc }, function(room) {
+    state.rooms.push(room);
+    state.currentRoom = room.roomId;
+    state.messages[room.roomId] = [];
+    renderRooms(); renderChatHeader(); renderMessages();
+    document.getElementById('a-room-name').value = '';
+    document.getElementById('a-room-desc').value = '';
+    document.getElementById('a-room-icon').value = '';
+    showToast('Channel #' + room.name + ' created! ✅');
+  }, function(err){ showToast('Error: ' + err); });
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1353,7 +1508,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 // Fired when user installs from our banner
 window.addEventListener('appinstalled', function() {
   hideInstallBanner();
-  showToast('TalkChatt installed! Find it on your home screen 🎉');
+  showToast('SupaChat installed! Find it on your home screen 🎉');
   deferredInstallPrompt = null;
 });
 
@@ -1378,7 +1533,7 @@ function triggerInstall() {
   deferredInstallPrompt.prompt();
   deferredInstallPrompt.userChoice.then(function(result) {
     if (result.outcome === 'accepted') {
-      showToast('Installing TalkChatt… 🚀');
+      showToast('Installing SupaChat… 🚀');
     }
     deferredInstallPrompt = null;
     hideInstallBanner();
@@ -1396,7 +1551,7 @@ function triggerInstall() {
 
   // Minimal service worker: cache-first for offline shell
   var swCode = `
-    var CACHE = 'TalkChatt-v1';
+    var CACHE = 'supachat-v1';
     var SHELL = []; // GAS serves dynamically, nothing to precache
 
     self.addEventListener('install', function(e) {
@@ -1435,7 +1590,7 @@ function triggerInstall() {
             // Network failed — try cache
             return caches.match(e.request).then(function(cached) {
               return cached || new Response(
-                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use TalkChatt.</h2>',
+                '<h2 style="font-family:sans-serif;padding:20px;color:#888">You are offline. Please reconnect to use SupaChat.</h2>',
                 { headers: { 'Content-Type': 'text/html' } }
               );
             });
@@ -1474,7 +1629,7 @@ init();
 <div id="install-banner">
   <div id="install-banner-icon">💬</div>
   <div id="install-banner-text">
-    <strong>Install TalkChatt</strong>
+    <strong>Install SupaChat</strong>
     <span>Add to home screen for the best experience</span>
   </div>
   <button id="install-banner-btn" onclick="triggerInstall()">Install</button>
