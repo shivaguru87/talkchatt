@@ -348,24 +348,265 @@ mark.hi{background:rgba(255,209,102,.3);color:inherit;border-radius:2px}
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 
 <script>
-Pi.init({ version: "2.0" });
+/* ══════════════════════════════════════════════
+   PI NETWORK AUTH
+══════════════════════════════════════════════ */
 
-async function auth() {
+var PI_USER = null;
+var PI_ACCESS_TOKEN = null;
+var PI_READY = false;
+
+/* ─────────────────────────────────────────────
+   Initialize Pi SDK
+───────────────────────────────────────────── */
+async function initPiAuth() {
+
   try {
-    const scopes = ['username'];
 
-    const authResult = await Pi.authenticate(scopes, function(payment) {
-      console.log(payment);
+    await Pi.init({
+      version: "2.0",
+      sandbox: false
     });
 
-    console.log("User authenticated:", authResult);
+    PI_READY = true;
 
-  } catch (err) {
-    console.error(err);
+    console.log('[Pi] SDK Initialized');
+
+    // Auto authenticate
+    await authenticatePiUser();
+
+  } catch(err) {
+
+    console.error('[Pi Init Error]', err);
+
   }
+
 }
 
-auth();
+/* ─────────────────────────────────────────────
+   Authenticate User
+───────────────────────────────────────────── */
+async function authenticatePiUser() {
+
+  try {
+
+    if (!PI_READY) {
+      await initPiAuth();
+      return;
+    }
+
+    const scopes = ['username'];
+
+    const authResult = await Pi.authenticate(
+      scopes,
+      onIncompletePaymentFound
+    );
+
+    console.log(
+      '[Pi Auth Success]',
+      authResult
+    );
+
+    PI_USER = authResult.user;
+    PI_ACCESS_TOKEN =
+      authResult.accessToken;
+
+    // Save locally
+    localStorage.setItem(
+      'pi_user',
+      JSON.stringify(PI_USER)
+    );
+
+    localStorage.setItem(
+      'pi_access_token',
+      PI_ACCESS_TOKEN
+    );
+
+    // Verify token
+    await verifyPiAccessToken(
+      PI_ACCESS_TOKEN
+    );
+
+    // Apply identity
+    applyPiIdentity();
+
+  } catch(err) {
+
+    console.error(
+      '[Pi Auth Failed]',
+      err
+    );
+
+  }
+
+}
+
+/* ─────────────────────────────────────────────
+   Verify Access Token
+───────────────────────────────────────────── */
+async function verifyPiAccessToken(
+  accessToken
+) {
+
+  try {
+
+    const response = await fetch(
+      'https://api.minepi.com/v2/me',
+      {
+        method: 'GET',
+        headers: {
+          Authorization:
+            'Bearer ' + accessToken
+        }
+      }
+    );
+
+    const userData =
+      await response.json();
+
+    console.log(
+      '[Pi Verify Success]',
+      userData
+    );
+
+    if (
+      !userData ||
+      !userData.username
+    ) {
+
+      throw new Error(
+        'Invalid Pi User'
+      );
+
+    }
+
+    localStorage.setItem(
+      'pi_verified_user',
+      JSON.stringify(userData)
+    );
+
+  } catch(err) {
+
+    console.error(
+      '[Pi Verify Failed]',
+      err
+    );
+
+  }
+
+}
+
+/* ─────────────────────────────────────────────
+   Apply Pi Identity To TalkChatt
+───────────────────────────────────────────── */
+function applyPiIdentity() {
+
+  if (!PI_USER) return;
+
+  // Set TalkChatt identity
+  localStorage.setItem(
+    'tc_userName',
+    PI_USER.username
+  );
+
+  // Permanent Pi-based ID
+  if (
+    !localStorage.getItem(
+      'tc_userId'
+    )
+  ) {
+
+    localStorage.setItem(
+      'tc_userId',
+      'pi_' + PI_USER.uid
+    );
+
+  }
+
+  // Default color
+  if (
+    !localStorage.getItem(
+      'tc_color'
+    )
+  ) {
+
+    localStorage.setItem(
+      'tc_color',
+      '#2ee8c0'
+    );
+
+  }
+
+  // Update username UI
+  var userLabel =
+    document.getElementById(
+      'user-name-label'
+    );
+
+  if (userLabel) {
+
+    userLabel.textContent =
+      PI_USER.username + ' 🟣';
+
+  }
+
+  // Update avatar UI
+  var avatar =
+    document.getElementById(
+      'user-avatar'
+    );
+
+  if (
+    avatar &&
+    typeof getInitials === 'function'
+  ) {
+
+    avatar.textContent =
+      getInitials(
+        PI_USER.username
+      );
+
+    avatar.style.background =
+      '#2ee8c0';
+
+  }
+
+}
+
+/* ─────────────────────────────────────────────
+   Payment Callback
+───────────────────────────────────────────── */
+function onIncompletePaymentFound(
+  payment
+) {
+
+  console.log(
+    '[Incomplete Payment]',
+    payment
+  );
+
+}
+
+/* ─────────────────────────────────────────────
+   Manual Login Support
+───────────────────────────────────────────── */
+async function manualPiLogin() {
+
+  await authenticatePiUser();
+
+}
+
+/* ─────────────────────────────────────────────
+   Start Automatically
+───────────────────────────────────────────── */
+window.addEventListener(
+  'DOMContentLoaded',
+  function () {
+
+    initPiAuth();
+
+  }
+);
 </script>
 <body>
 
@@ -453,6 +694,24 @@ auth();
         <span id="user-name-label">…</span>
       </div>
     </div>
+    <button
+onclick="manualPiLogin()"
+style="
+width:100%;
+margin-top:10px;
+background:#2ee8c0;
+color:#0e0e12;
+border:none;
+border-radius:8px;
+padding:10px;
+font-family:var(--font-mono);
+font-size:12px;
+font-weight:700;
+cursor:pointer;
+"
+>
+Sign In With Pi
+</button>
 
     <div id="search-panel">
       <input id="search-input" type="search" placeholder="Search messages…"
